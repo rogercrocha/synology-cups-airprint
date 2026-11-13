@@ -53,12 +53,13 @@ página sai colorida. O instalador corrige o driver para que preto e branco
 saia de fato em preto e branco, e colorido em cores. Os detalhes estão na
 próxima seção.
 
-O defeito foi relatado ao CUPS em
-[OpenPrinting/cups#1815](https://github.com/OpenPrinting/cups/issues/1815),
-com uma correção proposta em
-[#1816](https://github.com/OpenPrinting/cups/pull/1816). Enquanto um CUPS
-corrigido não chega ao Debian, este projeto aplica o contorno por conta
-própria.
+Para os mantenedores do CUPS, o driver é que deve usar a palavra-chave
+padrão dos PPDs (`Gray`). Por isso o relato agora está em
+[OpenPrinting/cups-filters#801](https://github.com/OpenPrinting/cups-filters/issues/801)
+e a correção foi proposta ao Foomatic em
+[OpenPrinting/foomatic-db#65](https://github.com/OpenPrinting/foomatic-db/pull/65).
+Enquanto um foomatic-db corrigido não chega ao Debian, este projeto aplica o
+contorno por conta própria.
 
 ## Por que existe
 

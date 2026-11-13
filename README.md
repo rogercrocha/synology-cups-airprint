@@ -51,11 +51,13 @@ toggle in the print dialog but ignores it, and every page prints in color.
 The installer corrects the driver so black & white really comes out in black
 and white, and color in color. The details are in the next section.
 
-The bug was reported to CUPS as
-[OpenPrinting/cups#1815](https://github.com/OpenPrinting/cups/issues/1815),
-with a fix proposed in
-[#1816](https://github.com/OpenPrinting/cups/pull/1816). Until a fixed CUPS
-reaches Debian, this project applies the workaround itself.
+The CUPS maintainers' view is that the driver should use the standard PPD
+keyword (`Gray`), so the report now lives at
+[OpenPrinting/cups-filters#801](https://github.com/OpenPrinting/cups-filters/issues/801)
+and the fix is proposed to Foomatic in
+[OpenPrinting/foomatic-db#65](https://github.com/OpenPrinting/foomatic-db/pull/65).
+Until a fixed foomatic-db reaches Debian, this project applies the
+workaround itself.
 
 ## Why this exists
 
