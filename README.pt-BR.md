@@ -68,13 +68,13 @@ resolver quatro problemas que até estão documentados, mas quase nunca juntos:
 
 1. **O controle de preto e branco é ignorado.** O CUPS anuncia
    `print-color-mode-supported = monochrome,color`, o controle aparece, e
-   todo trabalho sai colorido mesmo assim. O CUPS 2.4 original só traduz
-   `print-color-mode` para uma opção do PPD por meio de presets, e quando o
-   PPD não tem `*APPrinterPreset`, ele cria sozinho o preset de escala de
-   cinza apenas se o `ColorModel` tiver uma escolha chamada exatamente
-   `Gray`. Os PPDs do Foomatic chamam de `Grayscale`, e nada é traduzido. O
-   CUPS do Ubuntu tem um patch que esconde isso; o do Debian não. O
-   entrypoint acrescenta presets explícitos ao PPD da fila.
+   todo trabalho sai colorido mesmo assim. Os PPDs do Foomatic para os
+   drivers `pxlcolor` e `pxldpl` chamam a escolha de escala de cinza de
+   `ColorModel=Grayscale`, em vez da palavra-chave padrão dos PPDs, `Gray`.
+   Quando o PPD não tem `*APPrinterPreset`, o CUPS 2.4 monta o preset de
+   cinza só a partir das palavras-chave padrão, e nada é traduzido. (O CUPS
+   do Ubuntu tem um patch próprio que aceita também `Grayscale`; o do Debian
+   não.) O entrypoint acrescenta presets explícitos ao PPD da fila.
 2. **O iOS mostra "Reunindo informações da impressora" e a impressora some.**
    O iOS prefere IPPS. O CUPS cria o certificado autoassinado em
    `/etc/cups/ssl`, mas um volume montado em `/etc/cups` substitui a pasta

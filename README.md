@@ -66,13 +66,13 @@ fixing four problems that are each documented somewhere, but rarely together:
 
 1. **The black & white toggle is ignored.** CUPS advertises
    `print-color-mode-supported = monochrome,color`, the toggle shows up, and
-   every job still prints in color. Stock CUPS 2.4 maps `print-color-mode` to
-   a PPD option only through presets, and when a PPD has no
-   `*APPrinterPreset`, it auto-creates the grayscale preset only if
-   `ColorModel` has a choice named exactly `Gray`. Foomatic PPDs name it
-   `Grayscale`, so nothing is mapped. Ubuntu's CUPS carries a patch that
-   hides this; Debian's does not. The entrypoint appends explicit presets to
-   the queue's PPD.
+   every job still prints in color. The Foomatic PPDs for the `pxlcolor` and
+   `pxldpl` drivers name their grayscale choice `ColorModel=Grayscale`
+   instead of the standard PPD keyword `Gray`. When a PPD has no
+   `*APPrinterPreset`, CUPS 2.4 builds the grayscale preset only from the
+   standard keywords, so nothing is mapped. (Ubuntu's CUPS carries a local
+   patch that also accepts `Grayscale`; Debian's does not.) The entrypoint
+   appends explicit presets to the queue's PPD.
 2. **iOS shows "Gathering printer information" and the printer disappears.**
    iOS prefers IPPS. CUPS creates its self-signed certificate in
    `/etc/cups/ssl`, but a volume mounted on `/etc/cups` replaces the image's

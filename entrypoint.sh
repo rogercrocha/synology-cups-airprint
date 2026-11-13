@@ -182,12 +182,13 @@ create_queue() {
   fi
 }
 
-# Stock CUPS 2.4 maps print-color-mode=monochrome to a PPD option only through
-# presets. With no *APPrinterPreset in the PPD, it auto-creates the grayscale
-# preset only when ColorModel has a choice named exactly "Gray". Foomatic PPDs
-# call it "Grayscale", so the iOS/macOS black & white toggle is advertised
+# The Foomatic PPDs for pxlcolor and pxldpl name their grayscale choice
+# "ColorModel=Grayscale" instead of the standard PPD keyword "Gray". With no
+# *APPrinterPreset in the PPD, CUPS 2.4 builds the grayscale preset only from
+# the standard keywords, so the iOS/macOS black & white toggle is advertised
 # but silently ignored (jobs print in color). This adds explicit presets.
-# (Ubuntu's CUPS carries a patch that hides the problem; Debian's does not.)
+# Fix proposed upstream: https://github.com/OpenPrinting/foomatic-db/pull/65
+# (Ubuntu's CUPS carries a local patch that also accepts "Grayscale".)
 add_color_presets() {
   local name="$1" src="/etc/cups/ppd/$1.ppd" new="/tmp/$1.presets.ppd" color=""
   [ -f "$src" ] || { log "WARNING: $src not found, presets not added"; return 0; }
