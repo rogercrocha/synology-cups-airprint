@@ -21,8 +21,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # missing when /etc/cups comes from an empty volume on first boot.
 RUN cp -a /etc/cups /etc/cups-default
 
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY entrypoint.sh airprint-setup /usr/local/bin/
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/airprint-setup
+
+# The driver list takes CUPS about a minute to generate, so the setup
+# wizard reads a copy made once, here, instead of starting CUPS each time.
+RUN airprint-setup build-driver-list
 
 EXPOSE 631
 

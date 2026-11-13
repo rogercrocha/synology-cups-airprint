@@ -16,6 +16,47 @@ Synology NAS on DSM 7 (aarch64), Debian 13 "trixie" (CUPS 2.4.10), iOS and
 macOS. It should work with any printer that has a Foomatic/Ghostscript driver
 and with any Docker host that allows host networking.
 
+## Motivation
+
+My Brother MFC-9460CDN is more than ten years old and still prints well. It
+just does not speak AirPrint, so the iPhone and the Mac cannot use it on
+their own. Throwing away a good printer for that reason makes no sense, so I
+set out to give it a second life.
+
+First I tried the Printer Applications made for this, `ps-printer-app` and
+`ghostscript-printer-app`, on a Raspberry Pi. The printer showed up on the
+iPhone, but all of them had the same problem: the native black & white
+toggle in iOS did nothing, and every page came out in color. Getting CUPS to
+work properly on a Synology NAS was hard too, and Synology's own printer
+support is no alternative: it is limited, offers few drivers, and DSM 7
+itself warns that it will be discontinued in the next major system update.
+So I investigated why the
+toggle was ignored, found the cause in how CUPS passes that choice on to the
+printer's driver, and put the fix together with everything else in this
+project.
+
+It is meant for people without much technical background. The only thing
+you need is to be able to paste a few commands into an SSH session: the
+installer finds the printer, suggests a driver, asks a few questions and
+checks that the iPhone and Mac will see it.
+
+If you have an older printer in the same situation, I hope this helps you
+keep it in use.
+
+## The black & white fix
+
+The main thing this project adds is a **black & white toggle that works** on
+iOS and macOS. With Foomatic/Ghostscript drivers, stock CUPS shows the
+toggle in the print dialog but ignores it, and every page prints in color.
+The installer corrects the driver so black & white really comes out in black
+and white, and color in color. The details are in the next section.
+
+The bug was reported to CUPS as
+[OpenPrinting/cups#1815](https://github.com/OpenPrinting/cups/issues/1815),
+with a fix proposed in
+[#1816](https://github.com/OpenPrinting/cups/pull/1816). Until a fixed CUPS
+reaches Debian, this project applies the workaround itself.
+
 ## Why this exists
 
 Getting a queue to *appear* on an iPhone is easy. Getting it to behave took
@@ -76,54 +117,85 @@ with other models, working or not, are welcome as issues.
 - Synology NAS with DSM 7 and **Container Manager** (or any Linux host with
   Docker and Compose).
 - SSH access to the NAS with an administrator account.
-- The printer on the network with a fixed IP (a DHCP reservation is enough)
-  and raw socket printing on port 9100.
+- The printer on the network with a **fixed IP address**. Reserve it in your
+  router's DHCP settings before installing: if the printer gets another
+  address later, printing stops. The IP and the MAC address are on the
+  printer's network configuration page, which most printers can print from
+  their control panel.
 - DSM's own printer server turned off (port 631 must be free).
 
 ## Installation
 
-1. Download this repository to your home folder on the NAS. DSM has no `git`
-   unless you install the Git Server package, but `curl` works:
+On the NAS, over SSH:
 
-   ```bash
-   cd ~ && curl -L https://github.com/rogercrocha/synology-cups-airprint/archive/refs/heads/main.tar.gz | tar xz \
-     && mv synology-cups-airprint-main synology-cups-airprint
-   ```
-2. Find the driver for your printer. After the first build you can list
-   them with `sudo docker exec cups-airprint lpinfo -m | grep -i <model>`;
-   a close model from the same family usually works.
-3. Run the deploy script once. It creates `.env` from `.env.example` and stops:
+```bash
+cd ~ && curl -L https://github.com/rogercrocha/synology-cups-airprint/archive/refs/heads/main.tar.gz | tar xz \
+  && mv synology-cups-airprint-main synology-cups-airprint
+cd ~/synology-cups-airprint && sudo bash deploy.sh
+```
 
-   ```bash
-   cd ~/synology-cups-airprint && sudo bash deploy.sh
-   ```
+DSM has no `git` unless you install the Git Server package, which is why the
+download uses `curl`.
 
-4. Edit `/volume1/docker/synology-cups-airprint/.env` (at least
-   `PRINTER_URI`, `PRINTER_PPD` and `QUEUE_NAME`) and run the script again.
-   It builds the image, starts the container, creates the queue and shows
-   what the iPhone will see. A random password for the web interface is
-   written to `.env` if you left `change-me`.
+The first run asks a few questions, with a sensible default for each, so
+you can usually just press Enter:
 
-Pick the entry whose name ends in **"@ <your NAS name>"** on the iPhone or
-Mac. If the printer also announces itself, the entry without the suffix is
-the printer, not this server.
+```
+==> looking for printers on the network (about 20 seconds)
+  1) Brother MFC-9460CDN                      192.168.1.50
+  m) type the IP address
+Printer [1]:
 
-## Settings (`.env`)
+==> choosing a driver for Brother MFC-9460CDN
+  1) Generic PCL 6/PCL XL Printer Foomatic/pxlcolor  (color printers)
+  2) Generic PCL 6/PCL XL Printer Foomatic/pxlmono  (black & white printers)
+  3) Generic PostScript Printer
+  s) search the driver list
+Driver [1]:
+
+Name shown on iPhone and Mac [Brother MFC-9460CDN]:
+Paper size (A4 or Letter) [A4]:
+Location (optional):
+Password for the web interface:
+```
+
+Printers are found by SNMP. If yours does not show up (SNMP is off on some
+printers), choose `m` and type its IP address. The driver list shows drivers
+made for that exact model first, then generic ones for the printer
+languages it reports; `s` searches the whole list.
+
+The script then builds and starts the container and checks what the iPhone
+will see. Each step takes one line on screen, with the last few lines of the
+running command underneath while it works; the full output goes to
+`deploy.log` next to the script. On the iPhone or Mac, choose the printer whose name ends in
+**"@ <your NAS name>"**. If the printer also announces itself, the entry
+without the suffix is the printer, not this server.
+
+Running `sudo bash deploy.sh` again rebuilds and restarts, keeping the
+queue. To change the printer or any answer:
+
+```bash
+sudo bash deploy.sh --reconfigure
+```
+
+## Settings
+
+The answers are saved in `/volume1/docker/synology-cups-airprint/.env`
+(mode 600), together with the password for the CUPS web interface at
+`http://<NAS-IP>:631` (user `print`). The wizard asks for that password; press
+Enter to have one generated and shown at the end. You can also write that file yourself
+from `.env.example`, for example to install without questions.
 
 | Variable | Example | Meaning |
 |---|---|---|
 | `PRINTER_URI` | `socket://192.168.1.50:9100` | How CUPS reaches the printer |
-| `PRINTER_PPD` | `foomatic:Brother-HL-4050CDN-pxlcolor.ppd` | Driver, from `lpinfo -m` |
+| `PRINTER_PPD` | `foomatic:Generic-PCL_6_PCL_XL_Printer-pxlcolor.ppd` | Driver, from `lpinfo -m` |
 | `QUEUE_NAME` | `Brother_MFC-9460CDN` | Queue name, no spaces |
 | `QUEUE_DESC` | `Brother MFC-9460CDN` | Name shown on the devices |
 | `PRINTER_LOCATION` | `Home` | Location text |
 | `PAGE_SIZE` | `A4` | Default paper size |
 | `COLOR_DEFAULT` | `color` | Default for jobs that do not say (macOS opens the dialog with it) |
-| `CUPS_USER` / `CUPS_PASSWORD` | `print` | Login for `http://<NAS-IP>:631` |
-
-Settings that create the queue are applied only when the queue does not
-exist yet. To start over, stop the container and move the `config` folder
-away.
+| `CUPS_USER` / `CUPS_PASSWORD` | `print` | Login for the web interface |
 
 ## Testing the color mapping
 

@@ -1,0 +1,145 @@
+#!/bin/bash
+# Helper for the setup wizard in deploy.sh. Runs inside a throwaway container
+# built from this image, so the NAS itself needs nothing installed.
+#
+#   airprint-setup discover          printers found by SNMP on the local networks
+#   airprint-setup probe IP          the same, for one address
+#   airprint-setup ports IP          which of 9100, 631, 515 answer
+#                                    ("unresolved" if the name does not resolve)
+#   airprint-setup drivers MM [ID]   suggested drivers for a make-and-model
+#   airprint-setup search TEXT       drivers whose description contains TEXT
+#   airprint-setup build-driver-list cache the driver list (image build time)
+#
+# Printer lines are tab-separated: ip, uri, make-and-model, device-id.
+# Driver lines are tab-separated: ppd, description.
+
+set -uo pipefail
+
+# cupsBackendReport() lines: network URI "make-model" "info" "device-id" "location"
+parse_report() {
+  perl -ne '
+    next unless /^network\s+(\S+)\s+"((?:[^"\\]|\\.)*)"\s+"(?:[^"\\]|\\.)*"\s+"((?:[^"\\]|\\.)*)"/;
+    my ($uri, $mm, $id) = ($1, $2, $3);
+    my ($ip) = $uri =~ m{^\w+://\[?([^/\]]+?)\]?(?::\d+)?(?:/|$)};
+    next unless $ip;
+    s/\\(.)/$1/g for ($mm, $id);
+    print join("\t", $ip, $uri, $mm, $id), "\n";'
+}
+
+start_cupsd() {
+  mkdir -p /run/cups
+  /usr/sbin/cupsd >/dev/null 2>&1
+  for _ in $(seq 1 30); do
+    lpstat -r 2>/dev/null | grep -qx "scheduler is running" && return 0
+    sleep 1
+  done
+  echo "cupsd did not start" >&2
+  return 1
+}
+
+DRIVER_LIST=/usr/share/airprint-setup/drivers.txt
+
+# The full driver list as "ppd<TAB>description", from the copy made at
+# build time when there is one.
+driver_list() {
+  if [ -s "$DRIVER_LIST" ]; then
+    cat "$DRIVER_LIST"
+  else
+    start_cupsd || return 1
+    lpinfo -m 2>/dev/null | sed 's/ /\t/'
+  fi
+}
+
+norm() { tr 'A-Z' 'a-z' | tr -cd 'a-z0-9\n'; }
+
+# The snmp backend reports the URI the printer gives about itself, which
+# often contains the printer's own network name (a Brother answers with
+# lpr://BRN30055C3E2A65/BINARY_P1) instead of an address the NAS can reach.
+# With DebugLevel 2 the backend also logs which IP each SNMP reply came
+# from, so the name can be mapped back to that IP.
+snmp_ips() {
+  mkdir -p /tmp/snmpconf
+  printf 'Address @LOCAL\nCommunity public\nHostNameLookups off\nDebugLevel 2\n' > /tmp/snmpconf/snmp.conf
+  CUPS_SERVERROOT=/tmp/snmpconf timeout "$1" /usr/lib/cups/backend/snmp ${2:+"$2"} \
+    > /tmp/snmp.out 2> /tmp/snmp.err || true
+  parse_report < /tmp/snmp.out | perl -e '
+    my (%map, $from);
+    open(my $err, "<", "/tmp/snmp.err");
+    while (<$err>) {
+      if (/Received data from (\S+?)\.\.\.\s*$/) { $from = $1; next; }
+      if (defined $from && /"\w+:\/\/\[?([^\/\]:"]+)/) { $map{lc $1} = $from; }
+    }
+    while (<STDIN>) {
+      chomp; my @f = split /\t/, $_, -1;
+      $f[0] = $map{lc $f[0]} if $f[0] !~ /^[\d.]+$|:/ && exists $map{lc $f[0]};
+      print join("\t", @f), "\n";
+    }'
+}
+
+case "${1:-}" in
+  discover)
+    snmp_ips 25 | sort -u -t$'\t' -k1,1
+    ;;
+  probe)
+    snmp_ips 15 "$2" | head -1
+    ;;
+  ports)
+    # a name the container cannot resolve would look like "all ports closed"
+    if ! getent ahosts "$2" >/dev/null 2>&1; then echo unresolved; exit 0; fi
+    for p in 9100 631 515; do
+      if timeout 3 bash -c "</dev/tcp/$2/$p" 2>/dev/null; then echo "$p"; fi
+    done
+    ;;
+  drivers)
+    mm="${2:-}"; id="${3:-}"
+    driver_list > /tmp/drivers || exit 1
+    echo "    drivers available in this image: $(wc -l < /tmp/drivers)" >&2
+    model="${mm#* }"                       # drop the make
+    key="$(printf '%s\n' "$model" | norm)"
+    {
+      # 1. drivers made for this exact model, recommended ones first
+      if [ -n "$key" ] && [ "${#key}" -ge 4 ]; then
+        # one awk pass: compare the model with each description, both
+        # lowercased and stripped to letters and digits
+        awk -F'\t' -v key="$key" '{d = tolower($2); gsub(/[^a-z0-9]/, "", d); if (index(d, key)) print}' /tmp/drivers |
+          # the driver Foomatic recommends first, PostScript (often slow or
+          # stuck through foomatic-rip) last
+          awk -F'\t' '{r = ($2 ~ /\(recommended\)/) ? 0 : ($2 ~ /Postscript/) ? 2 : 1; print r "\t" $0}' |
+          sort -t$'\t' -k1,1n -k3,3 | cut -f2-
+      fi
+      # 2. generic drivers for the languages the printer says it speaks
+      langs="$(printf '%s\n' "$id" | sed -n 's/.*\(CMD\|COMMAND SET\):\([^;]*\).*/\2/Ip' | tr 'a-z' 'A-Z')"
+      case ",$langs," in
+        *PCLXL*|*PCL6*|*PCL\ 6*|",,")
+          grep -P '^foomatic:Generic-PCL_6_PCL_XL_Printer-pxlcolor\.ppd\t' /tmp/drivers | sed 's/ (recommended)//; s/$/  (color printers)/'
+          grep -P '^foomatic:Generic-PCL_6_PCL_XL_Printer-pxlmono\.ppd\t' /tmp/drivers | sed 's/ (recommended)//; s/$/  (black \& white printers)/'
+          ;;
+      esac
+      case ",$langs," in
+        *POSTSCRIPT*|*BR-SCRIPT*|",,")
+          grep -P '^drv:///sample\.drv/generic\.ppd\t' /tmp/drivers
+          ;;
+      esac
+      case ",$langs," in
+        *,PCL,*|*PCL5*)
+          grep -P '^foomatic:Generic-PCL_5c_Printer-ljet4\.ppd\t' /tmp/drivers
+          ;;
+      esac
+    } | awk -F'\t' '!seen[$1]++' | head -8
+    ;;
+  search)
+    driver_list | grep -iF -- "${2:-}" | sort -t$'\t' -k2,2 | head -25
+    ;;
+  build-driver-list)
+    start_cupsd || exit 1
+    mkdir -p "$(dirname "$DRIVER_LIST")"
+    lpinfo -m 2>/dev/null | sed 's/ /\t/' > "$DRIVER_LIST"
+    pkill -x cupsd 2>/dev/null || true
+    echo "driver list: $(wc -l < "$DRIVER_LIST") drivers"
+    [ -s "$DRIVER_LIST" ]
+    ;;
+  *)
+    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+    ;;
+esac
