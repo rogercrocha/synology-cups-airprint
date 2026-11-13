@@ -12,5 +12,4 @@ services:
       # Queues and server state persist across container rebuilds.
       - ./config:/etc/cups
     # Do NOT mount the host's /run/dbus: the container runs its own dbus and
-    # avahi, because DSM's avahi is usually not running. If you ever enable
-    # Bonjour on DSM itself, the two will fight over UDP port 5353.
+    # avahi. They coexist with DSM's avahi, which keeps announcing the NAS.

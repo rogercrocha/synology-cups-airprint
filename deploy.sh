@@ -140,13 +140,55 @@ else
 fi
 ok "Compose: ${COMPOSE[*]}"
 
-# Port 631 must be free. If DSM's own print server is on, turn it off in
-# Control Panel > External Devices > Printer.
-if ! "$DOCKER" ps --format '{{.Names}}' | grep -qx "$CONTAINER" \
-   && netstat -tln 2>/dev/null | grep -q ':631 '; then
-  fail "port 631 is in use (DSM print server on?). Turn it off and try again."
+# Port 631 (IPP) must be free, unless it is our own container holding it.
+# port_owner prints "PID NAME" of the process listening on 631, if any.
+port_owner() {
+  netstat -tlnp 2>/dev/null | awk '$4 ~ /:631$/ {split($7, a, "/"); print a[1], a[2]; exit}'
+}
+# container_of PID prints the name of the Docker container the process runs
+# in, or nothing when it belongs to the NAS itself.
+container_of() {
+  local id
+  id="$(grep -o -m1 -E '[0-9a-f]{64}' "/proc/$1/cgroup" 2>/dev/null || true)"
+  [ -n "$id" ] || return 0
+  "$DOCKER" ps --no-trunc --format '{{.ID}} {{.Names}}' | awk -v id="$id" '$1 == id {print $2}'
+}
+
+if "$DOCKER" ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
+  ok "Port 631 is ours (the server is already running)"
+elif netstat -tln 2>/dev/null | grep -q ':631 '; then
+  read -r OWNER_PID OWNER_NAME <<<"$(port_owner)"
+  OWNER_CT="$( [ -n "${OWNER_PID:-}" ] && container_of "$OWNER_PID" || true)"
+  if [ -n "$OWNER_CT" ]; then
+    fail "port 631 is used by the Docker container \"$OWNER_CT\" ($OWNER_NAME). Stop it (sudo docker stop $OWNER_CT) and run this again."
+  elif [ "${OWNER_NAME:-}" = cupsd ]; then
+    warn "Port 631 is used by DSM's own print service."
+    note "DSM starts it for printers added in Control Panel > External Devices > Printer."
+    note "Those printers stop working while this server runs; remove them there"
+    note "too, or DSM may start its print service again after a reboot."
+    answer="$(ask "Stop DSM's print service now? (yes/no)" "no")"
+    case "$answer" in
+      y|Y|yes|Yes|YES|s|S|sim|Sim)
+        for svc in cupsd cups-service-handler cups-lpd; do
+          synosystemctl stop "$svc" >> "$LOG" 2>&1 || true
+        done
+        sleep 2
+        if netstat -tln 2>/dev/null | grep -q ':631 '; then
+          fail "port 631 is still in use after stopping DSM's print service. Remove the printers in Control Panel > External Devices > Printer and try again."
+        fi
+        ok "DSM's print service stopped"
+        note "To bring it back later: sudo synosystemctl start cupsd"
+        ;;
+      *)
+        fail "port 631 is in use by DSM's print service. Remove the printers in Control Panel > External Devices > Printer, or answer yes to stop it."
+        ;;
+    esac
+  else
+    fail "port 631 is in use by ${OWNER_NAME:-another program}${OWNER_PID:+ (PID $OWNER_PID)}. Stop it and run this again."
+  fi
+else
+  ok "Port 631 is available"
 fi
-ok "Port 631 is available"
 
 # ---- 2. files and image --------------------------------------------------------------
 section "Preparing the server"

@@ -82,8 +82,10 @@ fixing four problems that are each documented somewhere, but rarely together:
    `PreserveJobHistory No`, CUPS purges a job as soon as it finishes. iOS
    then asks for the job's status, gets "not found", decides the job was lost
    and sends it again. The config keeps job history for one hour.
-4. **DSM does not run avahi**, so the container runs its own dbus and avahi
-   with host networking.
+4. **Bonjour runs inside the container.** The container brings its own dbus
+   and avahi and uses the host network, so the printer is announced without
+   touching DSM. DSM's own avahi (which announces the NAS itself, for example
+   to the Finder) keeps running; the two coexist.
 
 ## Will it work with my printer?
 

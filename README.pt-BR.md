@@ -85,8 +85,10 @@ resolver quatro problemas que até estão documentados, mas quase nunca juntos:
    então consulta o estado do trabalho, recebe "não encontrado", conclui que
    ele se perdeu e manda de novo. A configuração guarda o histórico por uma
    hora.
-4. **O DSM não roda o avahi**, então o container roda o seu próprio dbus e
-   avahi, com a rede do host.
+4. **O Bonjour roda dentro do container.** O container traz o seu próprio
+   dbus e avahi e usa a rede do host, então a impressora é anunciada sem
+   mexer no DSM. O avahi do próprio DSM (que anuncia o NAS, por exemplo para
+   o Finder) continua rodando; os dois convivem.
 
 ## Vai funcionar com a minha impressora?
 

@@ -122,7 +122,8 @@ else
 fi
 
 # --- 4. dbus + avahi (Bonjour / AirPrint announcement) ----------------------
-# DSM's own avahi is normally not running, so the container brings its own.
+# The container brings its own avahi, so nothing has to change in DSM. DSM's
+# avahi (which announces the NAS itself) can keep running next to it.
 if dbus-daemon --system --fork; then
   log "dbus started"
 else
