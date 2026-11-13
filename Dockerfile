@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       cups-ipp-utils \
       foomatic-db \
       foomatic-db-engine \
+      printer-driver-hpcups \
       ghostscript \
       avahi-daemon \
       avahi-utils \

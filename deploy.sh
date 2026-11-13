@@ -157,7 +157,7 @@ for f in Dockerfile entrypoint.sh airprint-setup docker-compose.yml .env.example
 done
 ok "Files copied to $DEST"
 note "The first build downloads about 300 MB; later builds take seconds."
-step "Building the image (Debian, CUPS, Ghostscript, drivers, Avahi)" \
+step "Building the image (Debian, CUPS, Ghostscript, Foomatic and HP drivers, Avahi)" \
   "$DOCKER" build -t "$IMAGE" "$DEST"
 
 helper()      { "$DOCKER" run --rm --network host --entrypoint airprint-setup "$IMAGE" "$@"; }

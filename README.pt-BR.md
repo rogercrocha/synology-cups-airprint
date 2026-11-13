@@ -95,10 +95,11 @@ Provavelmente, se tudo isto for verdade:
 - **O NAS alcança a impressora** pela rede: socket (porta 9100), LPD
   (`lpd://`) ou IPP. Impressoras USB não estão cobertas aqui.
 - **Existe driver para ela na imagem.** A imagem traz os drivers genéricos
-  do CUPS e o `foomatic-db` (os drivers do Ghostscript, como `pxlcolor`,
-  `pxlmono` e `ljet4`). Outras famílias precisam de um pacote Debian a mais
-  na linha `apt-get install` do `Dockerfile`, e depois um novo build:
-  `hplip` para HP, `printer-driver-brlaser` para muitas lasers Brother,
+  do CUPS, o `foomatic-db` (os drivers do Ghostscript, como `pxlcolor`,
+  `pxlmono` e `ljet4`) e os drivers `hpcups` da HP, para a maioria das
+  impressoras HP. Outras famílias precisam de um pacote Debian a mais na
+  linha `apt-get install` do `Dockerfile`, e depois um novo build:
+  `printer-driver-brlaser` para muitas lasers Brother,
   `printer-driver-splix` para Samsung e Xerox, `printer-driver-gutenprint`
   para muitas jato de tinta. Liste o que está disponível com
   `sudo docker exec cups-airprint lpinfo -m`.
